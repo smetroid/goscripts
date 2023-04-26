@@ -14,6 +14,7 @@ import (
 )
 
 var termState *term.State
+var workspaces []string
 
 func saveTermState() {
 	oldState, err := term.GetState(int(os.Stdin.Fd()))
@@ -52,8 +53,6 @@ func getWorkspaces() []string {
 	return wsList
 }
 
-var workspaces []string
-
 func wsOptions(input prompt.Document) []prompt.Suggest {
 	suggests := []prompt.Suggest{}
 	for _, command := range workspaces {
@@ -66,6 +65,22 @@ func wsOptions(input prompt.Document) []prompt.Suggest {
 	return prompt.FilterHasPrefix(suggests, input.GetWordBeforeCursor(), true)
 }
 
+func runCommand(input string) (result *exec.Cmd) {
+	command := strings.Split(input, " ")
+	cmd := exec.Command(command[0], command[1:]...)
+	var out strings.Builder
+	var outErr strings.Builder
+	cmd.Stdout = &out
+	cmd.Stderr = &outErr
+	err := cmd.Run()
+
+	if err != nil {
+		fmt.Printf("%s", outErr.String())
+	}
+
+	return cmd
+}
+
 func main() {
 	saveTermState()
 	workspaces = getWorkspaces()
@@ -74,16 +89,17 @@ func main() {
 	e := prompt.Input("> ", wsOptions)
 
 	if len(workspaces) > 1 {
-		cmd := exec.Command("terraform", "workspace", "select", e)
-		var out strings.Builder
-		var outErr strings.Builder
-		cmd.Stdout = &out
-		cmd.Stderr = &outErr
-		err := cmd.Run()
-		if err != nil {
-			fmt.Printf("%s", outErr.String())
+		r := runCommand("terraform workspace select " + e)
+		if r.Stderr != nil {
+			fmt.Println("Creating new workspace")
+			r := runCommand("terraform workspace new " + e)
+			if r.Err != nil {
+				fmt.Printf("%s", r.String())
+			}
+			fmt.Printf("%s", r.Stdout)
 		}
-		fmt.Printf("%s", out.String())
+		fmt.Printf("%s", r.Stdout)
+
 	} else {
 		fmt.Println("No other workspaces other than default found")
 	}

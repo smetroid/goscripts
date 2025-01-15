@@ -68,7 +68,6 @@ func filterCommandsByTag(resultSlice []map[string]string, tag string) map[string
 }
 
 func main() {
-
 	// Example path to the Sunbeam configuration file
 	configPath := filepath.Join(os.Getenv("HOME"), ".config", "sunbeam", "sunbeam.json")
 	// Retrieve memo preferences
@@ -91,7 +90,8 @@ func main() {
 	}
 
 	if apiKey == "" || apiURL == "" {
-		fmt.Println("Environment variables USEMEMOS_API_KEY and USEMEMOS_API_URL must be set.")
+		fmt.Println("Environment variables USEMEMOS_API_KEY and USEMEMOS_API_URL must be set. ... OR ")
+		fmt.Println("add token and url in sunbeam memos configuration")
 		os.Exit(1)
 	}
 
@@ -109,6 +109,7 @@ func main() {
 
 	// Construct the full URL with the tag filter
 	url := fmt.Sprintf("%s?%s", apiURL, tagFilter)
+	fmt.Println(url)
 
 	// Create HTTP client and request
 	client := &http.Client{}
@@ -136,7 +137,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	//fmt.Println(string(body))
 	// Handle the response based on status code
 	if resp.StatusCode == http.StatusOK {
 		// Parse the response body as JSON
@@ -156,18 +156,16 @@ func main() {
 			for _, memo := range response.Memos {
 				//fmt.Println(memo.Content)
 				codeBlock := extractCommand(memo.Content)
-				tags := extractTags(memo.Content)
-				//fmt.Println("content")
 				//fmt.Println(codeBlock)
-				//fmt.Println(tags)
-				//fmt.Println("content")
+				tags := extractTags(memo.Content)
 				itemMap := map[string]string{"name": codeBlock, "tags": strings.Join(tags, " ")}
 				stringsMap = append(stringsMap, itemMap)
 			}
 
 			// Call the function with tag "docker"
-			tag := "shell"
+			tag := "cmd"
 			filteredCommands := filterCommandsByTag(stringsMap, tag)
+			fmt.Println(filteredCommands)
 
 			// Transform to desired structure
 			var transformed []map[string]string

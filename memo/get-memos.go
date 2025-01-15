@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"memo/sunbeam"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -20,57 +22,6 @@ type MemoResponse struct {
 	NextPageToken string `json:"nextPageToken"`
 	Memos         []Memo `json:"memos"`
 }
-
-//// Helper function to find the index of the line corresponding to a character offset
-//func findLineIndex(lines []string, offset int) int {
-//	currentOffset := 0
-//	for i, line := range lines {
-//		currentOffset += len(line) + 1 // Add 1 for the newline character
-//		if currentOffset > offset {
-//			return i
-//		}
-//	}
-//	return -1
-//}
-//
-//// extractMdBlocks extracts fenced code blocks and their associated tags from markdown text.
-//func extractCodeBlock(text string) []map[string]string {
-//	// Define the regular expression pattern for fenced code blocks
-//	codeBlockPattern := regexp.MustCompile("(?s)```(?:\\w+\\s+)?(.*?)```")
-//
-//	// Find all matches of code blocks in the text
-//	matches := codeBlockPattern.FindAllStringSubmatchIndex(string(text), -1)
-//
-//	var results []map[string]string
-//	lines := strings.Split(string(text), "\n") // Split the text into lines for tag detection
-//
-//	for _, match := range matches {
-//		if len(match) >= 4 {
-//			// Extract the code block
-//			codeBlock := strings.TrimSpace(string(text[match[2]:match[3]]))
-//
-//			// Locate the potential tag line
-//			tags := ""
-//			endOfBlockIndex := match[1] // End of the matched code block
-//			tagStartLine := findLineIndex(lines, endOfBlockIndex)
-//
-//			if tagStartLine >= 0 && tagStartLine+1 < len(lines) {
-//				possibleTagLine := strings.TrimSpace(lines[tagStartLine+1])
-//				if strings.HasPrefix(possibleTagLine, "#") { // Ensure it's a valid tag line
-//					tags = possibleTagLine
-//				}
-//			}
-//
-//			// Add the code block and tag to the results
-//			results = append(results, map[string]string{
-//				"code": codeBlock,
-//				"tags": tags,
-//			})
-//		}
-//	}
-//
-//	return results
-//}
 
 // extractCommand parses the command from the shell code block
 func extractCommand(content string) string {
@@ -117,22 +68,40 @@ func filterCommandsByTag(resultSlice []map[string]string, tag string) map[string
 }
 
 func main() {
-	// Parse command-line arguments for additional filter tags
-	tags := flag.String("tags", "cmd,shell,script", "Comma-separated list of tags to filter memos (e.g., 'cmd,shell,script')")
-	flag.Parse()
 
-	// Get API key and API URL from environment variables
-	apiKey := os.Getenv("USEMEMOS_API_KEY")
-	apiURL := os.Getenv("USEMEMOS_API_URL")
+	// Example path to the Sunbeam configuration file
+	configPath := filepath.Join(os.Getenv("HOME"), ".config", "sunbeam", "sunbeam.json")
+	// Retrieve memo preferences
+	preferences, err := sunbeam.ReadSunbeamConfig(configPath)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
 
-	// Ensure the API URL ends with `/api/memos`
-	if !strings.HasSuffix(apiURL, "/api/v1/memos") {
-		apiURL = strings.TrimRight(apiURL, "/") + "/api/v1/memos"
+	apiKey := ""
+	apiURL := ""
+	if len(preferences.MemoToken) == 0 || len(preferences.MemoURL) == 0 {
+		fmt.Printf("Error: no values found in sunbeam memo extension configuration ... trying environment variables")
+
+		apiKey = os.Getenv("USEMEMOS_API_KEY")
+		apiURL = os.Getenv("USEMEMOS_API_URL")
+	} else {
+		apiKey = preferences.MemoToken
+		apiURL = preferences.MemoURL
 	}
 
 	if apiKey == "" || apiURL == "" {
 		fmt.Println("Environment variables USEMEMOS_API_KEY and USEMEMOS_API_URL must be set.")
 		os.Exit(1)
+	}
+
+	// Parse command-line arguments for additional filter tags
+	tags := flag.String("tags", "cmd,shell,script", "Comma-separated list of tags to filter memos (e.g., 'cmd,shell,script')")
+	flag.Parse()
+
+	// Ensure the API URL ends with `/api/memos`
+	if !strings.HasSuffix(apiURL, "/api/v1/memos") {
+		apiURL = strings.TrimRight(apiURL, "/") + "/api/v1/memos"
 	}
 
 	// Format tags into query parameter
@@ -167,7 +136,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println(string(body))
+	//fmt.Println(string(body))
 	// Handle the response based on status code
 	if resp.StatusCode == http.StatusOK {
 		// Parse the response body as JSON
@@ -192,7 +161,7 @@ func main() {
 				//fmt.Println(codeBlock)
 				//fmt.Println(tags)
 				//fmt.Println("content")
-				itemMap := map[string]string{"name": codeBlock, "tags": strings.Join(tags, ", ")}
+				itemMap := map[string]string{"name": codeBlock, "tags": strings.Join(tags, " ")}
 				stringsMap = append(stringsMap, itemMap)
 			}
 
@@ -200,8 +169,16 @@ func main() {
 			tag := "shell"
 			filteredCommands := filterCommandsByTag(stringsMap, tag)
 
+			// Transform to desired structure
+			var transformed []map[string]string
+			for key, value := range filteredCommands {
+				transformed = append(transformed, map[string]string{
+					"name": key,
+					"type": value,
+				})
+			}
 			// Convert list to JSON
-			jsonData, err := json.MarshalIndent(filteredCommands, "", "  ")
+			jsonData, err := json.MarshalIndent(transformed, "", "  ")
 			if err != nil {
 				log.Fatalf("Error converting to JSON: %v", err)
 			}

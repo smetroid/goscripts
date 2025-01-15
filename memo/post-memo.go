@@ -9,10 +9,22 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
 func main() {
+	// Example path to the Sunbeam configuration file
+	configPath := filepath.Join(os.Getenv("HOME"), ".config", "sunbeam", "extensions.json")
+
+	// Retrieve memo preferences
+	preferences, err := readSunbeamConfig(configPath)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	os.Exit(1)
 	// Parse command-line arguments
 	tags := flag.String("tags", "", "Comma-separated list of tags for the memo (e.g., 'shell,commands')")
 	flag.Parse()

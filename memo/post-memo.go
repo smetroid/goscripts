@@ -112,8 +112,16 @@ func main() {
 		allTags = append(allTags, strings.Split(additionalTags, ",")...)
 	}
 
+	// Extract the first word as a tag
+	firstWord := strings.Split(lastCommand, " ")[0]
+
 	// Prefix tags with # and format as Markdown
 	var hashtags []string
+
+	//add default tags
+	hashtags = append(hashtags, "#cmd")
+	hashtags = append(hashtags, "#"+firstWord)
+
 	for _, tag := range allTags {
 		tag = strings.TrimSpace(tag)
 		if tag != "" {
@@ -121,11 +129,9 @@ func main() {
 		}
 	}
 
-	// Extract the first word as a tag
-	firstWord := strings.Split(lastCommand, " ")[0]
 	tagsMarkdown := ""
 	if len(hashtags) > 0 {
-		tagsMarkdown = "\n\n**Tags:**\n#cmd #" + firstWord + " " + strings.Join(hashtags, " ")
+		tagsMarkdown = "\n\n**Tags:**\n" + strings.Join(hashtags, " ")
 	}
 
 	// Create Markdown content

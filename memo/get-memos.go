@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-type Memo struct {
+type MemoContent struct {
 	Content string `json:"content"`
 }
 
@@ -67,6 +67,70 @@ func filterCommandsByTag(resultSlice []map[string]string, tag string) map[string
 	return filteredResults
 }
 
+type Memo struct {
+	Content string `json:"content"`
+}
+
+type Response struct {
+	NextPageToken string `json:"nextPageToken"`
+	Memos         []Memo `json:"memos"`
+}
+
+func getMemos(token string, apiURL string) ([]Memo, error) {
+	var allMemos []Memo
+	url := apiURL
+
+	// Loop to handle pagination
+	for {
+		// Create the request
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %v", err)
+		}
+
+		// Add Authorization header
+		req.Header.Add("Authorization", "Bearer "+token)
+
+		// Send the request
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to send request: %v", err)
+		}
+		defer resp.Body.Close()
+
+		// Read the response body
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read response body: %v", err)
+		}
+
+		// Check if the request was successful
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		}
+
+		// Parse the JSON response
+		var response Response
+		err = json.Unmarshal(body, &response)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse response JSON: %v", err)
+		}
+
+		// Append the memos to the allMemos slice
+		allMemos = append(allMemos, response.Memos...)
+
+		// Check if there is a next page, and if so, update the URL
+		if response.NextPageToken == "" {
+			break // No more pages, exit the loop
+		}
+		url = fmt.Sprintf("%s&pageToken=%s", apiURL, response.NextPageToken)
+		//fmt.Println(url)
+	}
+
+	return allMemos, nil
+}
+
 func main() {
 	// Example path to the Sunbeam configuration file
 	configPath := filepath.Join(os.Getenv("HOME"), ".config", "sunbeam", "sunbeam.json")
@@ -96,7 +160,8 @@ func main() {
 	}
 
 	// Parse command-line arguments for additional filter tags
-	tags := flag.String("tags", "cmd,shell,script", "Comma-separated list of tags to filter memos (e.g., 'cmd,shell,script')")
+	//tags := flag.String("tags", "cmd,shell,script", "Comma-separated list of tags to filter memos (e.g., 'cmd,shell,script')")
+	tags := flag.String("tags", "", "Comma-separated list of tags to filter memos (e.g., 'cmd,shell,script')")
 	flag.Parse()
 
 	// Ensure the API URL ends with `/api/memos`
@@ -109,84 +174,38 @@ func main() {
 
 	// Construct the full URL with the tag filter
 	url := fmt.Sprintf("%s?%s", apiURL, tagFilter)
-	fmt.Println(url)
 
-	// Create HTTP client and request
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", url, nil)
+	memos, err := getMemos(apiKey, url)
 	if err != nil {
-		fmt.Printf("Error creating HTTP request: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("Error retrieving memos: %v", err)
 	}
 
-	// Add headers
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
+	stringsMap := []map[string]string{}
+	for _, memo := range memos {
+		codeBlock := extractCommand(memo.Content)
+		tags := extractTags(memo.Content)
+		itemMap := map[string]string{"name": codeBlock, "tags": strings.Join(tags, " ")}
+		stringsMap = append(stringsMap, itemMap)
+	}
 
-	// Send request
-	resp, err := client.Do(req)
+	// Call the function with tag "docker"
+	tag := "cmd"
+	filteredCommands := filterCommandsByTag(stringsMap, tag)
+
+	// Transform to desired structure
+	var transformed []map[string]string
+	for key, value := range filteredCommands {
+		transformed = append(transformed, map[string]string{
+			"name": key,
+			"type": value,
+		})
+	}
+	// Convert list to JSON
+	jsonData, err := json.MarshalIndent(transformed, "", "  ")
 	if err != nil {
-		fmt.Printf("Error sending request: %v\n", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Printf("Error reading response: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("Error converting to JSON: %v", err)
 	}
 
-	// Handle the response based on status code
-	if resp.StatusCode == http.StatusOK {
-		// Parse the response body as JSON
-		var response MemoResponse
-		err = json.Unmarshal(body, &response)
-		if err != nil {
-			fmt.Printf("Error parsing response JSON: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Display the retrieved memos
-		if len(response.Memos) == 0 {
-			fmt.Println("No memos found with the specified tags.")
-		} else {
-
-			stringsMap := []map[string]string{}
-			for _, memo := range response.Memos {
-				//fmt.Println(memo.Content)
-				codeBlock := extractCommand(memo.Content)
-				//fmt.Println(codeBlock)
-				tags := extractTags(memo.Content)
-				itemMap := map[string]string{"name": codeBlock, "tags": strings.Join(tags, " ")}
-				stringsMap = append(stringsMap, itemMap)
-			}
-
-			// Call the function with tag "docker"
-			tag := "cmd"
-			filteredCommands := filterCommandsByTag(stringsMap, tag)
-			fmt.Println(filteredCommands)
-
-			// Transform to desired structure
-			var transformed []map[string]string
-			for key, value := range filteredCommands {
-				transformed = append(transformed, map[string]string{
-					"name": key,
-					"type": value,
-				})
-			}
-			// Convert list to JSON
-			jsonData, err := json.MarshalIndent(transformed, "", "  ")
-			if err != nil {
-				log.Fatalf("Error converting to JSON: %v", err)
-			}
-
-			// Print JSON to console
-			fmt.Println(string(jsonData))
-
-		}
-	} else {
-		fmt.Printf("Failed to retrieve memos. Status: %s\n", resp.Status)
-		fmt.Printf("Response: %s\n", string(body))
-	}
+	// Print JSON to console
+	fmt.Println(string(jsonData))
 }

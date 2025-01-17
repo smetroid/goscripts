@@ -24,9 +24,9 @@ type MemoResponse struct {
 }
 
 // extractCommand parses the command from the shell code block
-func extractCommand(content string) string {
+func extractCodeBlock(content string) string {
 	// Match the content inside the shell code block
-	re := regexp.MustCompile("(?s)```shell\\n(.*?)\\n```")
+	re := regexp.MustCompile("(?s)```\\w*\\n(.*?)\\n```")
 	matches := re.FindStringSubmatch(content)
 	if len(matches) > 1 {
 		return matches[1]
@@ -37,8 +37,10 @@ func extractCommand(content string) string {
 // extractTags parses the tags from the Tags section
 func extractTags(content string) []string {
 	// Match the line starting with **Tags:** and extract hashtags
-	re := regexp.MustCompile(`(?i)\*\*Tags:\*\*\s*(#[a-zA-Z0-9-_]+(?:\s*#[a-zA-Z0-9-_]+)*)`)
+	re := regexp.MustCompile(`(?i)(#[a-zA-Z0-9-_]+(?:\s*#[a-zA-Z0-9-_]+)*)`)
+
 	matches := re.FindStringSubmatch(content)
+	fmt.Println(matches)
 	if len(matches) > 1 {
 		tagsLine := matches[1]
 		tags := strings.Fields(tagsLine) // Split by spaces
@@ -176,7 +178,7 @@ func main() {
 
 	// Construct the full URL with the tag filter
 	url := fmt.Sprintf("%s?filter=%s", apiURL, formattedTags)
-	fmt.Println(url)
+	//fmt.Println(url)
 
 	memos, err := getMemos(apiKey, url)
 	if err != nil {
@@ -185,7 +187,7 @@ func main() {
 
 	stringsMap := []map[string]string{}
 	for _, memo := range memos {
-		codeBlock := extractCommand(memo.Content)
+		codeBlock := extractCodeBlock(memo.Content)
 		tags := extractTags(memo.Content)
 		itemMap := map[string]string{"cmd": codeBlock, "tags": strings.Join(tags, " ")}
 		stringsMap = append(stringsMap, itemMap)

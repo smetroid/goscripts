@@ -169,11 +169,14 @@ func main() {
 		apiURL = strings.TrimRight(apiURL, "/") + "/api/v1/memos"
 	}
 
+	// Split the tags into a slice
+	tagList := strings.Split(*tags, ",")
 	// Format tags into query parameter
-	tagFilter := fmt.Sprintf("tags=%s", *tags)
+	formattedTags := fmt.Sprintf("tag_search==['%s']", strings.Join(tagList, "','"))
 
 	// Construct the full URL with the tag filter
-	url := fmt.Sprintf("%s?%s", apiURL, tagFilter)
+	url := fmt.Sprintf("%s?filter=%s", apiURL, formattedTags)
+	fmt.Println(url)
 
 	memos, err := getMemos(apiKey, url)
 	if err != nil {
@@ -184,24 +187,11 @@ func main() {
 	for _, memo := range memos {
 		codeBlock := extractCommand(memo.Content)
 		tags := extractTags(memo.Content)
-		itemMap := map[string]string{"name": codeBlock, "tags": strings.Join(tags, " ")}
+		itemMap := map[string]string{"cmd": codeBlock, "tags": strings.Join(tags, " ")}
 		stringsMap = append(stringsMap, itemMap)
 	}
 
-	// Call the function with tag "docker"
-	tag := "cmd"
-	filteredCommands := filterCommandsByTag(stringsMap, tag)
-
-	// Transform to desired structure
-	var transformed []map[string]string
-	for key, value := range filteredCommands {
-		transformed = append(transformed, map[string]string{
-			"name": key,
-			"type": value,
-		})
-	}
-	// Convert list to JSON
-	jsonData, err := json.MarshalIndent(transformed, "", "  ")
+	jsonData, err := json.MarshalIndent(stringsMap, "", "  ")
 	if err != nil {
 		log.Fatalf("Error converting to JSON: %v", err)
 	}

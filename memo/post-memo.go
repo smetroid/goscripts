@@ -10,6 +10,7 @@ import (
 	"memo/sunbeam"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -66,10 +67,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Parse command-line arguments
 	tags := flag.String("tags", "", "Comma-separated list of tags for the memo (e.g., 'shell,commands')")
+	clipboard := flag.Bool("clipboard", false, "Create a memo using the contents of the clipboard")
 	flag.Parse()
 
+	var content string
+	if *clipboard {
+		cmd := exec.Command("sunbeam", "paste")
+		out, err := cmd.Output()
+		if err != nil {
+			fmt.Printf("Error reading clipboard: %v\n", err)
+			os.Exit(1)
+		}
+		content = string(out)
+	} else {
+		lastCommand, err := getLastShellCommand()
+		if err != nil {
+			fmt.Printf("Error retrieving last shell command: %v\n", err)
+			os.Exit(1)
+		}
+		content = lastCommand
+	}
 	// Ensure the API URL ends with `/api/memo`
 	if !strings.HasSuffix(apiURL, "/api/v1/memos") {
 		apiURL = strings.TrimRight(apiURL, "/") + "/api/v1/memos"
@@ -81,23 +99,23 @@ func main() {
 	}
 
 	// Get the last shell command executed
-	lastCommand, err := getLastShellCommand()
-	if err != nil {
-		fmt.Printf("Error retrieving last shell command: %v\n", err)
-		os.Exit(1)
-	}
+	//lastCommand, err := getLastShellCommand()
+	//if err != nil {
+	//	fmt.Printf("Error retrieving last shell command: %v\n", err)
+	//	os.Exit(1)
+	//}
 
 	// Trim any trailing newline
-	lastCommand = strings.TrimSpace(lastCommand)
+	content = strings.TrimSpace(content)
 
 	// If the last command is empty, exit
-	if lastCommand == "" {
+	if content == "" {
 		fmt.Println("No last shell command found.")
 		os.Exit(1)
 	}
 
 	// Prompt for additional tags
-	fmt.Printf("command: %s \n", lastCommand)
+	fmt.Printf("content: %s \n", content)
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("Enter additional tags (comma-separated): ")
 	additionalTags, _ := reader.ReadString('\n')
@@ -113,7 +131,7 @@ func main() {
 	}
 
 	// Extract the first word as a tag
-	firstWord := strings.Split(lastCommand, " ")[0]
+	firstWord := strings.Split(content, " ")[0]
 
 	// Prefix tags with # and format as Markdown
 	var hashtags []string
@@ -135,7 +153,7 @@ func main() {
 	}
 
 	// Create Markdown content
-	markdownContent := fmt.Sprintf("```shell\n%s\n```%s", lastCommand, tagsMarkdown)
+	markdownContent := fmt.Sprintf("```bash\n%s\n```%s", content, tagsMarkdown)
 
 	// Create memo payload
 	memo := map[string]interface{}{

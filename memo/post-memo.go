@@ -119,7 +119,7 @@ func main() {
 	var hashtags []string
 
 	//add default tags
-	hashtags = append(hashtags, "#cmd")
+	hashtags = append(hashtags, "#cmds")
 	hashtags = append(hashtags, "#"+firstWord)
 
 	for _, tag := range allTags {

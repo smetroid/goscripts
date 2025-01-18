@@ -40,7 +40,7 @@ func extractTags(content string) []string {
 	re := regexp.MustCompile(`(?i)(#[a-zA-Z0-9-_]+(?:\s*#[a-zA-Z0-9-_]+)*)`)
 
 	matches := re.FindStringSubmatch(content)
-	fmt.Println(matches)
+	//fmt.Println(matches)
 	if len(matches) > 1 {
 		tagsLine := matches[1]
 		tags := strings.Fields(tagsLine) // Split by spaces
@@ -174,11 +174,16 @@ func main() {
 	// Split the tags into a slice
 	tagList := strings.Split(*tags, ",")
 	// Format tags into query parameter
-	formattedTags := fmt.Sprintf("tag_search==['%s']", strings.Join(tagList, "','"))
+	url := ""
 
-	// Construct the full URL with the tag filter
-	url := fmt.Sprintf("%s?filter=%s", apiURL, formattedTags)
-	//fmt.Println(url)
+	// if no tags, the default is an empty string, which will be 1
+	if len(tagList) == 1 && tagList[0] == "" {
+		url = fmt.Sprintf("%s?", apiURL)
+	} else {
+		formattedTags := fmt.Sprintf("tag_search==['%s']", strings.Join(tagList, "','"))
+		// Construct the full URL with the tag filter
+		url = fmt.Sprintf("%s?filter=%s", apiURL, formattedTags)
+	}
 
 	memos, err := getMemos(apiKey, url)
 	if err != nil {
@@ -189,7 +194,7 @@ func main() {
 	for _, memo := range memos {
 		codeBlock := extractCodeBlock(memo.Content)
 		tags := extractTags(memo.Content)
-		itemMap := map[string]string{"cmd": codeBlock, "tags": strings.Join(tags, " ")}
+		itemMap := map[string]string{"cmd": codeBlock, "tags": strings.Join(tags, " "), "content": memo.Content}
 		stringsMap = append(stringsMap, itemMap)
 	}
 
